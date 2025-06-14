@@ -1,7 +1,7 @@
 import telebot
 
 # توکن رباتت رو اینجا قرار بده
-TOKEN = "7217912729:AAGsCp-YNxnlMUB8M352p2EcVGB2K0at2Xg"
+TOKEN = "7217912729:AAFjqdGSBKl3XfDtVHXUaz1GjvKLPaEYS6k"
 bot = telebot.TeleBot(TOKEN)
 
 # وقتی کاربر /start رو بفرسته
