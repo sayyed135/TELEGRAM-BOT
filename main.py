@@ -2,7 +2,7 @@ import telebot
 import json
 import os
 
-TOKEN = "7217912729:AAE9WC3RD1Waeu3vYB0ajF7Abl3OHTsThoo"
+TOKEN = "7217912729:AAFuXcRQNl0p-uCQZb64cxakJD15_b414q8"
 bot = telebot.TeleBot(TOKEN)
 
 ADMIN_ID = 6994772164  # آیدی عددی خودت رو اینجا بزار
