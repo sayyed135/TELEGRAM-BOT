@@ -1,91 +1,128 @@
 import telebot
 import json
-import os
+from datetime import datetime, timedelta
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
-TOKEN = "7217912729:AAFuXcRQNl0p-uCQZb64cxakJD15_b414q8"
+TOKEN = '7217912729:AAFuXcRQNl0p-uCQZb64cxakJD15_b414q8'
+ADMIN_ID = 6994772164  # آی‌دی عددی محمد
+
 bot = telebot.TeleBot(TOKEN)
 
-ADMIN_ID = 6994772164  # آیدی عددی خودت رو اینجا بزار
-
-DATA_FILE = "data.json"
-
-if not os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "w") as f:
-        json.dump({}, f)
-
+DATA_FILE = 'users.json'
 
 def load_data():
-    with open(DATA_FILE, "r") as f:
-        return json.load(f)
-
+    try:
+        with open(DATA_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return {}
 
 def save_data(data):
-    with open(DATA_FILE, "w") as f:
+    with open(DATA_FILE, 'w') as f:
         json.dump(data, f)
 
+def get_user(uid):
+    data = load_data()
+    if str(uid) not in data:
+        data[str(uid)] = {
+            'score': 0,
+            'level': 'رایگان',
+            'last_daily': '',
+            'joined': datetime.now().isoformat()
+        }
+        save_data(data)
+    return data[str(uid)]
+
+def update_user(uid, field, value):
+    data = load_data()
+    data[str(uid)][field] = value
+    save_data(data)
+
+def change_score(uid, amount):
+    data = load_data()
+    data[str(uid)]['score'] += amount
+    save_data(data)
 
 @bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user_id = str(message.from_user.id)
-    data = load_data()
-    if user_id not in data:
-        data[user_id] = 0
-        save_data(data)
-    bot.reply_to(message, "سلام! به ربات امتیازی خوش آمدید.")
+def start(message):
+    uid = message.from_user.id
+    get_user(uid)
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("🎁 امتیاز روزانه", "📊 امتیاز من")
+    markup.add("🛍️ خرید اشتراک", "🧑‍💼 مدیریت")
+    bot.send_message(uid, "به ربات خوش آمدی!", reply_markup=markup)
 
+@bot.message_handler(func=lambda m: m.text == "🎁 امتیاز روزانه")
+def daily_reward(message):
+    uid = message.from_user.id
+    user = get_user(uid)
+    today = datetime.now().date()
+    last = datetime.fromisoformat(user['last_daily']).date() if user['last_daily'] else None
+    if last == today:
+        bot.send_message(uid, "تو امروز امتیازت رو گرفتی!")
+    else:
+        change_score(uid, 1)
+        update_user(uid, 'last_daily', datetime.now().isoformat())
+        bot.send_message(uid, "✅ ۱ امتیاز روزانه دریافت شد!")
 
-@bot.message_handler(commands=['score'])
-def show_score(message):
-    user_id = str(message.from_user.id)
-    data = load_data()
-    score = data.get(user_id, 0)
-    bot.reply_to(message, f"امتیاز شما: {score}")
+@bot.message_handler(func=lambda m: m.text == "📊 امتیاز من")
+def my_score(message):
+    uid = message.from_user.id
+    user = get_user(uid)
+    bot.send_message(uid, f"امتیاز: {user['score']}\nسطح: {user['level']}")
 
+@bot.message_handler(func=lambda m: m.text == "🛍️ خرید اشتراک")
+def buy_sub(message):
+    uid = message.from_user.id
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+    markup.add("📦 معمولی - ۳ امتیاز", "⚙️ حرفه‌ای - ۱۰ امتیاز", "👑 VIP - 20 امتیاز", "🔙 برگشت")
+    bot.send_message(uid, "یک اشتراک انتخاب کن:", reply_markup=markup)
 
-@bot.message_handler(commands=['add_score'])
-def add_score(message):
-    if message.from_user.id != ADMIN_ID:
-        return bot.reply_to(message, "فقط مدیر می‌تونه امتیاز بده.")
+@bot.message_handler(func=lambda m: m.text in ["📦 معمولی - ۳ امتیاز", "⚙️ حرفه‌ای - ۱۰ امتیاز", "👑 VIP - 20 امتیاز"])
+def handle_buy(message):
+    uid = message.from_user.id
+    user = get_user(uid)
+    options = {
+        "📦 معمولی - ۳ امتیاز": ("معمولی", 3),
+        "⚙️ حرفه‌ای - ۱۰ امتیاز": ("حرفه‌ای", 10),
+        "👑 VIP - 20 امتیاز": ("VIP", 20)
+    }
+    level, cost = options[message.text]
+    if user['score'] >= cost:
+        change_score(uid, -cost)
+        update_user(uid, 'level', level)
+        bot.send_message(uid, f"✅ اشتراک {level} خریداری شد.")
+    else:
+        bot.send_message(uid, "❌ امتیاز کافی نداری.")
 
-    try:
-        _, user_id, score_type = message.text.split()
-        user_id = str(user_id)
-        score_type = score_type.lower()
-
-        if score_type == "الماسی":
-            amount = 5
-        elif score_type == "حرفه‌ای" or score_type == "حرفه اي":
-            amount = 3
-        elif score_type == "سکه‌ای" or score_type == "سکه اي":
-            amount = 1
-        else:
-            return bot.reply_to(message, "نوع امتیاز نامعتبر است.")
-
-        data = load_data()
-        data[user_id] = data.get(user_id, 0) + amount
-        save_data(data)
-        bot.reply_to(message, f"{amount} امتیاز برای کاربر {user_id} اضافه شد.")
-    except:
-        bot.reply_to(message, "فرمت دستور اشتباه است.\nفرمت: /add_score user_id نوع_امتیاز")
-
-
-@bot.message_handler(commands=['broadcast'])
-def broadcast(message):
+@bot.message_handler(func=lambda m: m.text == "🧑‍💼 مدیریت")
+def admin_panel(message):
     if message.from_user.id != ADMIN_ID:
         return
-
-    msg = message.text.replace("/broadcast", "").strip()
-    if not msg:
-        return bot.reply_to(message, "لطفاً متنی برای ارسال همگانی بنویسید.")
-
     data = load_data()
-    for uid in data:
-        try:
-            bot.send_message(uid, f"📢 پیام مدیر:\n\n{msg}")
-        except:
-            pass
+    total = len(data)
+    active = sum(1 for u in data.values() if u['last_daily'])
+    vip = [uid for uid, u in data.items() if u['level'] == 'VIP']
+    pro = [uid for uid, u in data.items() if u['level'] == 'حرفه‌ای']
+    norm = [uid for uid, u in data.items() if u['level'] == 'معمولی']
 
-    bot.reply_to(message, "پیام برای همه کاربران ارسال شد.")
+    def link(uid):
+        return f"[{uid}](tg://user?id={uid})"
 
+    msg = f"""📊 آمار کاربران:
 
-bot.infinity_polling()
+👥 کل: {total}
+✅ فعال: {active}
+
+👑 VIP:
+{chr(10).join(link(u) for u in vip) or 'هیچ‌کس'}
+
+⚙️ حرفه‌ای:
+{chr(10).join(link(u) for u in pro) or 'هیچ‌کس'}
+
+📦 معمولی:
+{chr(10).join(link(u) for u in norm) or 'هیچ‌کس'}
+"""
+    bot.send_message(message.chat.id, msg, parse_mode='Markdown')
+
+bot.polling()
